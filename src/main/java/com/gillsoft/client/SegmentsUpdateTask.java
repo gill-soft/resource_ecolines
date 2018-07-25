@@ -40,7 +40,11 @@ public class SegmentsUpdateTask implements Runnable, Serializable {
 	}
 	
 	protected Object getCachedObject(RestClient client) {
-		return client.getSegments();
+		try {
+			return client.getSegments();
+		} catch (ResponseError e) {
+			return null;
+		}
 	}
 
 }

@@ -23,7 +23,11 @@ public class StopsUpdateTask extends SegmentsUpdateTask {
 	
 	@Override
 	protected Object getCachedObject(RestClient client) {
-		return client.getStops(lang);
+		try {
+			return client.getStops(lang);
+		} catch (ResponseError e) {
+			return null;
+		}
 	}
 
 }

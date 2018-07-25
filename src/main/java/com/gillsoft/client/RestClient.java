@@ -23,6 +23,7 @@ import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -40,6 +41,7 @@ public class RestClient {
 	
 	public static final String STOPS_CACHE_KEY = "ecolines.stops.";
 	public static final String SEGMENTS_CACHE_KEY = "ecolines.segments";
+	public static final String JOURNEYS_CACHE_KEY = "ecolines.journeys.";
 	
 	public static final String CURR_ID = "31"; // по договору UAH
 
@@ -102,7 +104,7 @@ public class RestClient {
 		return (List<Stop>) cache.read(params);
 	}
 	
-	public List<Stop> getStops(Lang lang) {
+	public List<Stop> getStops(Lang lang) throws ResponseError {
 		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
 		params.add("locale", getLocale(lang));
 		return sendRequest(searchTemplate, STOP, HttpMethod.GET, params, new ParameterizedTypeReference<List<Stop>>() {});
@@ -116,27 +118,39 @@ public class RestClient {
 		return (List<Segment>) cache.read(params);
 	}
 	
-	public List<Segment> getSegments() {
+	public List<Segment> getSegments() throws ResponseError {
 		return sendRequest(searchTemplate, SEGMENT, HttpMethod.GET, null, new ParameterizedTypeReference<List<Segment>>() {});
 	}
 	
-	public List<Leg> getLegs(String fromId, String toId, Date date) {
-		Map<String, String> params = new HashMap<>();
-		params.put("outboundOrigin", fromId);
-		params.put("outboundDestination", toId);
-		params.put("outboundDate", dateFormat.format(date));
-		params.put("currency", CURR_ID);
-		params.put("adults", "1");
-		params.put("applyDiscounts", "0");
-		return null;
+	@SuppressWarnings("unchecked")
+	public List<Journey> getCachedJourneys(String fromId, String toId, Date date) throws IOCacheException {
+		Map<String, Object> params = new HashMap<>();
+		params.put(RedisMemoryCache.OBJECT_NAME, getJourneysCacheKey(fromId, toId, date));
+		params.put(RedisMemoryCache.UPDATE_TASK, new SegmentsUpdateTask());
+		return (List<Journey>) cache.read(params);
+	}
+	
+	public List<Journey> getJourneys(String fromId, String toId, Date date) throws ResponseError {
+		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+		params.add("outboundOrigin", fromId);
+		params.add("outboundDestination", toId);
+		params.add("outboundDate", dateFormat.format(date));
+		params.add("currency", CURR_ID);
+		params.add("adults", "1");
+		params.add("applyDiscounts", "0");
+		return sendRequest(searchTemplate, JOURNEYS, HttpMethod.GET, params, new ParameterizedTypeReference<List<Journey>>() {});
 	}
 	
 	private <T> T sendRequest(RestTemplate template, String uriMethod, HttpMethod httpMethod,
-			MultiValueMap<String, String> params,  ParameterizedTypeReference<T> typeReference) {
+			MultiValueMap<String, String> params,  ParameterizedTypeReference<T> typeReference) throws ResponseError {
 		URI uri = UriComponentsBuilder.fromUriString(Config.getUrl() + uriMethod).queryParams(params).build().toUri();
 		RequestEntity<Object> requestEntity = new RequestEntity<>(headers, httpMethod, uri);
-		ResponseEntity<T> response = searchTemplate.exchange(requestEntity, typeReference);
-		return response.getBody();
+		try {
+			ResponseEntity<T> response = searchTemplate.exchange(requestEntity, typeReference);
+			return response.getBody();
+		} catch (RestClientException e) {
+			throw new ResponseError(e.getMessage());
+		}
 	}
 	
 	private MultiValueMap<String, String> createHeaders() {
@@ -172,10 +186,19 @@ public class RestClient {
 	public static String getStopsCacheKey(Lang lang) {
 		return STOPS_CACHE_KEY + lang.toString();
 	}
+	
+	public static String getJourneysCacheKey(String from, String to, Date date) {
+		return String.join(".", from, to, dateFormat.format(date));
+	}
 
 	public static void main(String[] args) {
 		RestClient client = new RestClient();
-		System.out.println(client.getStops(null).size());
+		try {
+			System.out.println(client.getStops(null).size());
+		} catch (ResponseError e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 }
