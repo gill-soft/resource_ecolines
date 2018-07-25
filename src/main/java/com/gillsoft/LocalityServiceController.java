@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.gillsoft.abstract_rest_service.AbstractLocalityService;
 import com.gillsoft.cache.IOCacheException;
 import com.gillsoft.client.RestClient;
+import com.gillsoft.client.Segment;
 import com.gillsoft.client.Stop;
 import com.gillsoft.model.Lang;
 import com.gillsoft.model.Locality;
@@ -24,6 +26,7 @@ import com.google.common.base.Objects;
 public class LocalityServiceController extends AbstractLocalityService {
 	
 	public static List<Locality> all;
+	private static Map<String, List<String>> binding;
 	
 	@Autowired
 	private RestClient client;
@@ -36,7 +39,8 @@ public class LocalityServiceController extends AbstractLocalityService {
 
 	@Override
 	public Map<String, List<String>> getBindingResponse(LocalityRequest request) {
-		return null;
+		createLocalities();
+		return binding;
 	}
 
 	@Override
@@ -50,6 +54,7 @@ public class LocalityServiceController extends AbstractLocalityService {
 		if (LocalityServiceController.all == null) {
 			synchronized (LocalityServiceController.class) {
 				if (LocalityServiceController.all == null) {
+					createBinding();
 					Map<String, Locality> localities = new HashMap<>();
 					for (Lang lang : Lang.values()) {
 						addLocalities(lang, localities);
@@ -60,6 +65,25 @@ public class LocalityServiceController extends AbstractLocalityService {
 				}
 			}
 		}
+	}
+	
+	private void createBinding() {
+		boolean cacheError = true;
+		do {
+			try {
+				List<Segment> segments = client.getCachedSegments();
+				if (segments != null) {
+					LocalityServiceController.binding = segments.stream().collect(Collectors.groupingBy(Segment::getStringOrigin,
+							Collectors.mapping(Segment::getStringDestination, Collectors.toList())));
+				}
+				cacheError = false;
+			} catch (IOCacheException e) {
+				try {
+					TimeUnit.MILLISECONDS.sleep(100);
+				} catch (InterruptedException ie) {
+				}
+			}
+		} while (cacheError);
 	}
 	
 	private void addLocalities(Lang lang, Map<String, Locality> localities) {

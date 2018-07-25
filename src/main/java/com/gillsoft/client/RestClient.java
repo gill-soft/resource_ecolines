@@ -3,11 +3,13 @@ package com.gillsoft.client;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.http.entity.ContentType;
+import org.apache.logging.log4j.core.util.datetime.FastDateFormat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
@@ -37,6 +39,7 @@ import com.gillsoft.util.StringUtil;
 public class RestClient {
 	
 	public static final String STOPS_CACHE_KEY = "ecolines.stops.";
+	public static final String SEGMENTS_CACHE_KEY = "ecolines.segments";
 	
 	public static final String CURR_ID = "31"; // по договору UAH
 
@@ -62,6 +65,9 @@ public class RestClient {
 	public static final String CONFIRMED = "confirmed";
 	public static final String DELETED = "deleted";
 	public static final String CANCELED = "canceled";
+	
+	private static final String DATE_FORMAT = "yyyy-MM-dd";
+	public static final FastDateFormat dateFormat = FastDateFormat.getInstance(DATE_FORMAT);
 	
 	@Autowired
     @Qualifier("RedisMemoryCache")
@@ -92,8 +98,6 @@ public class RestClient {
 	public List<Stop> getCachedStops(Lang lang) throws IOCacheException {
 		Map<String, Object> params = new HashMap<>();
 		params.put(RedisMemoryCache.OBJECT_NAME, getStopsCacheKey(lang));
-		params.put(RedisMemoryCache.IGNORE_AGE, true);
-		params.put(RedisMemoryCache.UPDATE_DELAY, Config.getCacheStationsUpdateDelay());
 		params.put(RedisMemoryCache.UPDATE_TASK, new StopsUpdateTask(lang));
 		return (List<Stop>) cache.read(params);
 	}
@@ -102,6 +106,29 @@ public class RestClient {
 		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
 		params.add("locale", getLocale(lang));
 		return sendRequest(searchTemplate, STOP, HttpMethod.GET, params, new ParameterizedTypeReference<List<Stop>>() {});
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<Segment> getCachedSegments() throws IOCacheException {
+		Map<String, Object> params = new HashMap<>();
+		params.put(RedisMemoryCache.OBJECT_NAME, SEGMENTS_CACHE_KEY);
+		params.put(RedisMemoryCache.UPDATE_TASK, new SegmentsUpdateTask());
+		return (List<Segment>) cache.read(params);
+	}
+	
+	public List<Segment> getSegments() {
+		return sendRequest(searchTemplate, SEGMENT, HttpMethod.GET, null, new ParameterizedTypeReference<List<Segment>>() {});
+	}
+	
+	public List<Leg> getLegs(String fromId, String toId, Date date) {
+		Map<String, String> params = new HashMap<>();
+		params.put("outboundOrigin", fromId);
+		params.put("outboundDestination", toId);
+		params.put("outboundDate", dateFormat.format(date));
+		params.put("currency", CURR_ID);
+		params.put("adults", "1");
+		params.put("applyDiscounts", "0");
+		return null;
 	}
 	
 	private <T> T sendRequest(RestTemplate template, String uriMethod, HttpMethod httpMethod,
