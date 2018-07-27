@@ -165,10 +165,19 @@ public class RestClient {
 		return getJourneyDetails(LEGS, journeyId, new ParameterizedTypeReference<List<Leg>>() {});
 	}
 	
+	public List<Seat> getSeats(String leg) throws ResponseError {
+		return getJourneyDetails(SEATS, "leg", leg, new ParameterizedTypeReference<List<Seat>>() {}); 
+	}
+	
 	private <T> T getJourneyDetails(String method, String journeyId, ParameterizedTypeReference<T> typeReference)
 			throws ResponseError {
+		return getJourneyDetails(method, "journey", journeyId, typeReference);
+	}
+	
+	private <T> T getJourneyDetails(String method, String paramKey, String paramValue, ParameterizedTypeReference<T> typeReference)
+			throws ResponseError {
 		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-		params.add("journey", journeyId);
+		params.add(paramKey, paramValue);
 		return sendRequest(searchTemplate, method, HttpMethod.GET, params, typeReference);
 	}
 	

@@ -21,6 +21,7 @@ import com.gillsoft.cache.CacheHandler;
 import com.gillsoft.cache.IOCacheException;
 import com.gillsoft.client.CancelRule;
 import com.gillsoft.client.Journey;
+import com.gillsoft.client.Leg;
 import com.gillsoft.client.ResponseError;
 import com.gillsoft.client.RestClient;
 import com.gillsoft.client.TariffType;
@@ -38,6 +39,8 @@ import com.gillsoft.model.ReturnCondition;
 import com.gillsoft.model.Route;
 import com.gillsoft.model.RoutePoint;
 import com.gillsoft.model.Seat;
+import com.gillsoft.model.SeatStatus;
+import com.gillsoft.model.SeatType;
 import com.gillsoft.model.SeatsScheme;
 import com.gillsoft.model.Segment;
 import com.gillsoft.model.SimpleTripSearchPackage;
@@ -113,7 +116,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 			Map<String, Segment> segments, List<TripContainer> containers,
 			SimpleTripSearchPackage<List<Journey>> result) {
 		if (!result.isInProgress()) {
-			addResult(vehicles, localities, organisations, segments, containers, result);
+			addResult(localities, organisations, segments, containers, result);
 		} else {
 			callables.add(() -> {
 				searchJourneys(result);
@@ -122,8 +125,8 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		}
 	}
 	
-	private void addResult(Map<String, Vehicle> vehicles, Map<String, Locality> localities,
-			Map<String, Organisation> organisations, Map<String, Segment> segments, List<TripContainer> containers,
+	private void addResult(Map<String, Locality> localities, Map<String, Organisation> organisations,
+			Map<String, Segment> segments, List<TripContainer> containers,
 			SimpleTripSearchPackage<List<Journey>> result) {
 		TripContainer container = new TripContainer();
 		container.setRequest(result.getRequest());
@@ -136,28 +139,8 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 						// только прямые рейсы
 						&& journey.getLegs().size() == 1) {
 
-					TripIdModel idModel = new TripIdModel();
-					idModel.setId(journey.getId());
-					idModel.getIds().add(journey.getLegs().get(0).getId());
 					Trip trip = new Trip();
-					trip.setId(idModel.asString());
-					
-					Segment segment = new Segment();
-					segment.setDepartureDate(journey.getOutbound().getDeparture());
-					segment.setArrivalDate(journey.getOutbound().getArrival());
-					segment.setDeparture(createLocality(localities, journey.getOutbound().getOrigin()));
-					segment.setArrival(createLocality(localities, journey.getOutbound().getDestination()));
-					segment.setCarrier(addOrganisation(organisations, journey.getOutbound().getDisplayCarrierTitle()));
-					addPrice(journey, segment);
-					
-					// добавляем маршрут
-					try {
-						List<Waypoint> waypoints = client.getCachedWaypoints(journey.getId());
-						segment.setRoute(createRoute(localities, waypoints));
-					} catch (IOCacheException | ResponseError e) {
-					}
-					segments.put(trip.getId(), segment);
-					
+					trip.setId(addSegment(localities, organisations, segments, journey, journey.getLegs().get(0)));
 					trips.add(trip);
 				}
 			}
@@ -167,6 +150,32 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 			container.setError(new RestError(result.getException().getMessage()));
 		}
 		containers.add(container);
+	}
+	
+	private String addSegment(Map<String, Locality> localities, Map<String, Organisation> organisations,
+			Map<String, Segment> segments, Journey journey, Leg leg) {
+		
+		TripIdModel idModel = new TripIdModel();
+		idModel.setId(journey.getId());
+		idModel.setLegId(leg.getId());
+		String id = idModel.asString();
+		
+		Segment segment = new Segment();
+		segment.setDepartureDate(leg.getDeparture());
+		segment.setArrivalDate(leg.getArrival());
+		segment.setDeparture(createLocality(localities, leg.getOrigin()));
+		segment.setArrival(createLocality(localities, leg.getDestination()));
+		segment.setCarrier(addOrganisation(organisations, journey.getOutbound().getDisplayCarrierTitle()));
+		addPrice(journey, segment);
+		
+		// добавляем маршрут
+		try {
+			List<Waypoint> waypoints = client.getCachedWaypoints(journey.getId());
+			segment.setRoute(createRoute(localities, waypoints));
+		} catch (IOCacheException | ResponseError e) {
+		}
+		segments.put(id, segment);
+		return id;
 	}
 	
 	private Route createRoute(Map<String, Locality> localities, List<Waypoint> waypoints) {
@@ -277,7 +286,23 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 
 	@Override
 	public List<Seat> getSeatsResponse(String tripId) {
-		// TODO Auto-generated method stub
+		TripIdModel idModel = new TripIdModel().create(tripId);
+		try {
+			List<com.gillsoft.client.Seat> seats = client.getSeats(idModel.getLegId());
+			List<Seat> newSeats = new ArrayList<>(seats.size());
+			for (com.gillsoft.client.Seat seat : seats) {
+				Seat newSeat = new Seat();
+				newSeat.setType(seat.getId() != 0 ? SeatType.SEAT : SeatType.FLOOR);
+				if (seat.getId() != 0) {
+					newSeat.setId(String.valueOf(seat.getId()));
+					newSeat.setNumber(newSeat.getId());
+					newSeat.setStatus(seat.isBusy() ? SeatStatus.SALED : SeatStatus.FREE);
+				}
+				newSeats.add(newSeat);
+			}
+			return newSeats;
+		} catch (ResponseError e) {
+		}
 		return null;
 	}
 

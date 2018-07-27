@@ -1,8 +1,5 @@
 package com.gillsoft.client;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.gillsoft.model.AbstractJsonModel;
 
 public class TripIdModel extends AbstractJsonModel {
@@ -10,7 +7,7 @@ public class TripIdModel extends AbstractJsonModel {
 	private static final long serialVersionUID = 6685617842271023619L;
 
 	private String id;
-	private List<String> ids = new ArrayList<>();
+	private String legId;
 
 	public String getId() {
 		return id;
@@ -20,12 +17,12 @@ public class TripIdModel extends AbstractJsonModel {
 		this.id = id;
 	}
 
-	public List<String> getIds() {
-		return ids;
+	public String getLegId() {
+		return legId;
 	}
 
-	public void setIds(List<String> ids) {
-		this.ids = ids;
+	public void setLegId(String legId) {
+		this.legId = legId;
 	}
 
 	@Override

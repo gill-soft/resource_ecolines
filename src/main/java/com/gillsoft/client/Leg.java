@@ -1,6 +1,10 @@
 package com.gillsoft.client;
 
 import java.io.Serializable;
+import java.util.Date;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonFormat.Shape;
 
 public class Leg implements Serializable {
 
@@ -9,8 +13,13 @@ public class Leg implements Serializable {
 	private String id;
 	private int origin;
 	private int destination;
-	private String departure;
-	private String arrival;
+	
+	@JsonFormat(shape = Shape.STRING, pattern = "yyyy-MM-dd HH:mm")
+	private Date departure;
+	
+	@JsonFormat(shape = Shape.STRING, pattern = "yyyy-MM-dd HH:mm")
+	private Date arrival;
+	
 	private int duration;
 	private String direction;
 
@@ -38,19 +47,19 @@ public class Leg implements Serializable {
 		this.destination = destination;
 	}
 
-	public String getDeparture() {
+	public Date getDeparture() {
 		return departure;
 	}
 
-	public void setDeparture(String departure) {
+	public void setDeparture(Date departure) {
 		this.departure = departure;
 	}
 
-	public String getArrival() {
+	public Date getArrival() {
 		return arrival;
 	}
 
-	public void setArrival(String arrival) {
+	public void setArrival(Date arrival) {
 		this.arrival = arrival;
 	}
 
