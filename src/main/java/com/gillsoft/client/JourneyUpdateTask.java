@@ -1,16 +1,13 @@
 package com.gillsoft.client;
 
-import java.io.Serializable;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
+import com.gillsoft.cache.AbstractUpdateTask;
 import com.gillsoft.cache.IOCacheException;
-import com.gillsoft.cache.RedisMemoryCache;
 import com.gillsoft.util.ContextProvider;
 
-public class JourneyUpdateTask implements Runnable, Serializable {
+public class JourneyUpdateTask extends AbstractUpdateTask {
 
 	private static final long serialVersionUID = 6325078282507603948L;
 	
@@ -30,32 +27,37 @@ public class JourneyUpdateTask implements Runnable, Serializable {
 
 	@Override
 	public void run() {
-		Map<String, Object> params = new HashMap<>();
-		params.put(RedisMemoryCache.OBJECT_NAME, RestClient.getJourneysCacheKey(fromId, toId, date));
-		params.put(RedisMemoryCache.UPDATE_TASK, this);
-		params.put(RedisMemoryCache.UPDATE_DELAY, Config.getCacheTripUpdateDelay());
 
-		// получаем рейсы для создания кэша
+		// РїРѕР»СѓС‡Р°РµРј СЂРµР№СЃС‹ РґР»СЏ СЃРѕР·РґР°РЅРёСЏ РєСЌС€Р°
 		RestClient client = ContextProvider.getBean(RestClient.class);
-		Object cachedObject = null;
 		try {
 			List<Journey> journeys = client.getJourneys(fromId, toId, date);
-			params.put(RedisMemoryCache.TIME_TO_LIVE, getTimeToLive(journeys));
-			cachedObject = journeys;
+			if (journeys != null) {
+				for (Journey journey : journeys) {
+					
+					// РґР»СЏ РєР°Р¶РґРѕРіРѕ СЂРµР№СЃР° РґРµСЂРіР°РµРј РїРѕР»СѓС‡РµРЅРёРµ РјР°СЂС€СЂСѓС‚Р°
+					try {
+						client.getCachedWaypoints(journey.getId());
+					} catch (IOCacheException | ResponseError e) {
+					}
+					// Рё СЃРµРіРјРµРЅС‚РѕРІ
+					try {
+						client.getCachedLegs(journey.getId(), journey.getOutbound().getDeparture());
+					} catch (IOCacheException | ResponseError e) {
+					}
+				}
+			}
+			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date), journeys,
+					getTimeToLive(journeys), Config.getCacheTripUpdateDelay());
 		} catch (ResponseError e) {
 
-			// ошибку поиска тоже кладем в кэш но с другим временем жизни
-			params.put(RedisMemoryCache.TIME_TO_LIVE, Config.getCacheErrorTimeToLive());
-			params.put(RedisMemoryCache.UPDATE_DELAY, Config.getCacheErrorUpdateDelay());
-			cachedObject = e;
-		}
-		try {
-			client.getCache().write(cachedObject, params);
-		} catch (IOCacheException e) {
+			// РѕС€РёР±РєСѓ РїРѕРёСЃРєР° С‚РѕР¶Рµ РєР»Р°РґРµРј РІ РєСЌС€ РЅРѕ СЃ РґСЂСѓРіРёРј РІСЂРµРјРµРЅРµРј Р¶РёР·РЅРё
+			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date), e,
+					Config.getCacheErrorTimeToLive(), Config.getCacheErrorUpdateDelay());
 		}
 	}
 	
-	// время жизни до момента самого позднего отправления
+	// РІСЂРµРјСЏ Р¶РёР·РЅРё РґРѕ РјРѕРјРµРЅС‚Р° СЃР°РјРѕРіРѕ РїРѕР·РґРЅРµРіРѕ РѕС‚РїСЂР°РІР»РµРЅРёСЏ
 	private long getTimeToLive(List<Journey> journeys) {
 		if (Config.getCacheTripTimeToLive() != 0) {
 			return Config.getCacheTripTimeToLive();

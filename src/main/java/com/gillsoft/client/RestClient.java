@@ -2,6 +2,7 @@ package com.gillsoft.client;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -42,8 +43,10 @@ public class RestClient {
 	public static final String STOPS_CACHE_KEY = "ecolines.stops.";
 	public static final String SEGMENTS_CACHE_KEY = "ecolines.segments";
 	public static final String JOURNEYS_CACHE_KEY = "ecolines.journeys.";
+	public static final String WAYPOINTS_CACHE_KEY = "ecolines.waypoints.";
+	public static final String LEGS_CACHE_KEY = "ecolines.legs.";
 	
-	public static final String CURR_ID = "31"; // по договору UAH
+	public static final String CURR_ID = "31"; // РїРѕ РґРѕРіРѕРІРѕСЂСѓ UAH
 
 	private static final String STOP = "stops";
 	private static final String SEGMENT = "segments";
@@ -68,7 +71,10 @@ public class RestClient {
 	public static final String DELETED = "deleted";
 	public static final String CANCELED = "canceled";
 	
-	private static final String DATE_FORMAT = "yyyy-MM-dd";
+	public static final String TIME_FORMAT = "HH:mm";
+	public static final String DATE_FORMAT = "yyyy-MM-dd";
+	
+	public final static FastDateFormat timeFormat = FastDateFormat.getInstance(TIME_FORMAT);
 	public static final FastDateFormat dateFormat = FastDateFormat.getInstance(DATE_FORMAT);
 	
 	@Autowired
@@ -77,7 +83,7 @@ public class RestClient {
 	
 	private RestTemplate template;
 	
-	// для запросов поиска с меньшим таймаутом
+	// РґР»СЏ Р·Р°РїСЂРѕСЃРѕРІ РїРѕРёСЃРєР° СЃ РјРµРЅСЊС€РёРј С‚Р°Р№РјР°СѓС‚РѕРј
 	private RestTemplate searchTemplate;
 	
 	private MultiValueMap<String, String> headers;
@@ -96,12 +102,12 @@ public class RestClient {
 		return template;
 	}
 	
-	@SuppressWarnings("unchecked")
 	public List<Stop> getCachedStops(Lang lang) throws IOCacheException {
-		Map<String, Object> params = new HashMap<>();
-		params.put(RedisMemoryCache.OBJECT_NAME, getStopsCacheKey(lang));
-		params.put(RedisMemoryCache.UPDATE_TASK, new StopsUpdateTask(lang));
-		return (List<Stop>) cache.read(params);
+		try {
+			return getCachedObject(getStopsCacheKey(lang), new StopsUpdateTask(lang));
+		} catch (ResponseError e) {
+			return null;
+		}
 	}
 	
 	public List<Stop> getStops(Lang lang) throws ResponseError {
@@ -110,27 +116,26 @@ public class RestClient {
 		return sendRequest(searchTemplate, STOP, HttpMethod.GET, params, new ParameterizedTypeReference<List<Stop>>() {});
 	}
 	
-	@SuppressWarnings("unchecked")
 	public List<Segment> getCachedSegments() throws IOCacheException {
-		Map<String, Object> params = new HashMap<>();
-		params.put(RedisMemoryCache.OBJECT_NAME, SEGMENTS_CACHE_KEY);
-		params.put(RedisMemoryCache.UPDATE_TASK, new SegmentsUpdateTask());
-		return (List<Segment>) cache.read(params);
+		try {
+			return getCachedObject(SEGMENTS_CACHE_KEY, new SegmentsUpdateTask());
+		} catch (ResponseError e) {
+			return null;
+		}
 	}
 	
 	public List<Segment> getSegments() throws ResponseError {
 		return sendRequest(searchTemplate, SEGMENT, HttpMethod.GET, null, new ParameterizedTypeReference<List<Segment>>() {});
 	}
 	
-	@SuppressWarnings("unchecked")
-	public List<Journey> getCachedJourneys(String fromId, String toId, Date date) throws IOCacheException {
-		Map<String, Object> params = new HashMap<>();
-		params.put(RedisMemoryCache.OBJECT_NAME, getJourneysCacheKey(fromId, toId, date));
-		params.put(RedisMemoryCache.UPDATE_TASK, new SegmentsUpdateTask());
-		return (List<Journey>) cache.read(params);
+	public List<Journey> getCachedJourneys(String fromId, String toId, Date date)
+			throws IOCacheException, ResponseError {
+		return getCachedObject(getJourneysCacheKey(fromId, toId, date), new JourneyUpdateTask(fromId, toId, date));
 	}
 	
 	public List<Journey> getJourneys(String fromId, String toId, Date date) throws ResponseError {
+		
+		// РїРѕРєР° РЅРµ РёС‰РµРј СЃС‚С‹РєРѕРІРѕС‡РЅС‹С… СЂРµР№СЃРѕРІ Рё СЂР°СѓРЅРґС‚СЂРёРїРѕРІ
 		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
 		params.add("outboundOrigin", fromId);
 		params.add("outboundDestination", toId);
@@ -138,7 +143,48 @@ public class RestClient {
 		params.add("currency", CURR_ID);
 		params.add("adults", "1");
 		params.add("applyDiscounts", "0");
+		params.add("directOnly", "1");
 		return sendRequest(searchTemplate, JOURNEYS, HttpMethod.GET, params, new ParameterizedTypeReference<List<Journey>>() {});
+	}
+	
+	public List<Waypoint> getCachedWaypoints(String journeyId)
+			throws IOCacheException, ResponseError {
+		return getCachedObject(getWaypointsCacheKey(journeyId), new WaypointsUpdateTask(journeyId));
+	}
+	
+	public List<Waypoint> getWaypoints(String journeyId) throws ResponseError {
+		return getJourneyDetails(WAYPOINTS, journeyId, new ParameterizedTypeReference<List<Waypoint>>() {});
+	}
+	
+	public List<Leg> getCachedLegs(String journeyId, Date dispatchDate)
+			throws IOCacheException, ResponseError {
+		return getCachedObject(getLegsCacheKey(journeyId), new LegsUpdateTask(journeyId, dispatchDate));
+	}
+	
+	public List<Leg> getLegs(String journeyId) throws ResponseError {
+		return getJourneyDetails(LEGS, journeyId, new ParameterizedTypeReference<List<Leg>>() {});
+	}
+	
+	private <T> T getJourneyDetails(String method, String journeyId, ParameterizedTypeReference<T> typeReference)
+			throws ResponseError {
+		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+		params.add("journey", journeyId);
+		return sendRequest(searchTemplate, method, HttpMethod.GET, params, typeReference);
+	}
+	
+	@SuppressWarnings("unchecked")
+	private <T> T getCachedObject(String key, Runnable task) throws IOCacheException, ResponseError {
+		Map<String, Object> params = new HashMap<>();
+		params.put(RedisMemoryCache.OBJECT_NAME, key);
+		params.put(RedisMemoryCache.UPDATE_TASK, task);
+		Object cached = cache.read(params);
+		if (cached == null) {
+			return null;
+		}
+		if (cached instanceof ResponseError) {
+			throw (ResponseError) cached;
+		}
+		return (T) cached;
 	}
 	
 	private <T> T sendRequest(RestTemplate template, String uriMethod, HttpMethod httpMethod,
@@ -187,18 +233,16 @@ public class RestClient {
 		return STOPS_CACHE_KEY + lang.toString();
 	}
 	
+	public static String getWaypointsCacheKey(String journeyId) {
+		return WAYPOINTS_CACHE_KEY + journeyId;
+	}
+	
+	public static String getLegsCacheKey(String journeyId) {
+		return LEGS_CACHE_KEY + journeyId;
+	}
+	
 	public static String getJourneysCacheKey(String from, String to, Date date) {
 		return String.join(".", from, to, dateFormat.format(date));
-	}
-
-	public static void main(String[] args) {
-		RestClient client = new RestClient();
-		try {
-			System.out.println(client.getStops(null).size());
-		} catch (ResponseError e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 	}
 
 }

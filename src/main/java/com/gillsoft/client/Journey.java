@@ -1,6 +1,7 @@
 package com.gillsoft.client;
 
 import java.io.Serializable;
+import java.util.List;
 
 public class Journey implements Serializable {
 
@@ -10,6 +11,7 @@ public class Journey implements Serializable {
 	private Bound outbound;
 	private Bound inbound;
 	private int fare;
+	private List<Leg> legs;
 
 	public String getId() {
 		return id;
@@ -41,6 +43,14 @@ public class Journey implements Serializable {
 
 	public void setFare(int fare) {
 		this.fare = fare;
+	}
+
+	public List<Leg> getLegs() {
+		return legs;
+	}
+
+	public void setLegs(List<Leg> legs) {
+		this.legs = legs;
 	}
 
 }
