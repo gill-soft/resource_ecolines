@@ -99,13 +99,13 @@ public class LocalityServiceController extends AbstractLocalityService {
 						if (locality == null) {
 							locality = new Locality();
 							locality.setId(key);
-							localities.put(key, locality);
 							locality.setDetails(stop.getState());
+							locality.setLatitude(getDecimal(stop.getLocation().getLatitude()));
+							locality.setLongitude(getDecimal(stop.getLocation().getLongitude()));
+							localities.put(key, locality);
 						}
 						locality.setName(lang, stop.getTitle());
 						locality.setAddress(lang, stop.getDescription());
-						locality.setLatitude(getDecimal(stop.getLocation().getLatitude()));
-						locality.setLongitude(getDecimal(stop.getLocation().getLongitude()));
 						all.add(locality);
 					}
 				}

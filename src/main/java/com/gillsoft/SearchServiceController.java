@@ -4,8 +4,10 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -15,15 +17,18 @@ import org.joda.time.LocalDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestClientException;
 
 import com.gillsoft.abstract_rest_service.SimpleAbstractTripSearchService;
 import com.gillsoft.cache.CacheHandler;
 import com.gillsoft.cache.IOCacheException;
 import com.gillsoft.client.CancelRule;
+import com.gillsoft.client.Fare;
 import com.gillsoft.client.Journey;
 import com.gillsoft.client.Leg;
 import com.gillsoft.client.ResponseError;
 import com.gillsoft.client.RestClient;
+import com.gillsoft.client.TariffIdModel;
 import com.gillsoft.client.TariffType;
 import com.gillsoft.client.TripIdModel;
 import com.gillsoft.client.Waypoint;
@@ -50,6 +55,7 @@ import com.gillsoft.model.TripContainer;
 import com.gillsoft.model.Vehicle;
 import com.gillsoft.model.request.TripSearchRequest;
 import com.gillsoft.model.response.TripSearchResponse;
+import com.gillsoft.util.RestTemplateUtil;
 import com.gillsoft.util.StringUtil;
 
 @RestController
@@ -208,7 +214,9 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		
 		// тариф
 		Tariff tariff = new Tariff();
-		tariff.setId(TariffType.ADULT.getCode());
+		TariffIdModel idModel = new TariffIdModel();
+		idModel.setId(TariffType.ADULT.getCode());
+		tariff.setId(idModel.asString());
 		tariff.setValue(new BigDecimal(journey.getFare()).multiply(new BigDecimal("0.01")));
 		
 		if (journey.getOutbound().getCancelRules() != null) {
@@ -274,14 +282,46 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 			List<Waypoint> waypoints = client.getCachedWaypoints(idModel.getId());
 			return createRoute(null, waypoints);
 		} catch (IOCacheException | ResponseError e) {
-			return null;
+			throw new RestClientException(e.getMessage());
 		}
 	}
 
 	@Override
 	public SeatsScheme getSeatsSchemeResponse(String tripId) {
-		// TODO Auto-generated method stub
-		return null;
+		TripIdModel idModel = new TripIdModel().create(tripId);
+		try {
+			List<com.gillsoft.client.Seat> seats = client.getSeats(idModel.getLegId());
+			Map<String, String> seatsKeys = new HashMap<>();
+			int maxRow = 0;
+			int maxCol = 0;
+			for (com.gillsoft.client.Seat seat : seats) {
+				seatsKeys.put(seat.getColumn() + ";" + seat.getRow(), String.valueOf(seat.getId()));
+				if (maxRow < seat.getRow()) {
+					maxRow = seat.getRow();
+				}
+				if (maxCol < seat.getColumn()) {
+					maxCol = seat.getColumn();
+				}
+			}
+			SeatsScheme seatsScheme = new SeatsScheme();
+			seatsScheme.setScheme(new HashMap<>());
+			
+			// список ид мест
+			// первый list строки, второй - колонки
+			List<List<String>> scheme = new ArrayList<>(maxRow);
+			for (int i = 1; i <= maxRow; i++) {
+				List<String> col = new ArrayList<>(maxCol);
+				scheme.add(col);
+				for (int j = 1; j <= maxCol; j++) {
+					String id = seatsKeys.get(j + ";" + i);
+					col.add(id == null ? "" : id);
+				}
+			}
+			seatsScheme.getScheme().put(1, scheme);
+			return seatsScheme;
+		} catch (ResponseError e) {
+			throw new RestClientException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -302,26 +342,73 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 			}
 			return newSeats;
 		} catch (ResponseError e) {
+			throw new RestClientException(e.getMessage());
 		}
-		return null;
 	}
 
 	@Override
 	public List<Tariff> getTariffsResponse(String tripId) {
-		// TODO Auto-generated method stub
-		return null;
+		TripIdModel idModel = new TripIdModel().create(tripId);
+		try {
+			List<Fare> fares = client.getFares(idModel.getLegId());
+			List<Tariff> tariffs = new ArrayList<>(fares.size());
+			for (Fare fare : fares) {
+				TariffIdModel tariffIdModel = new TariffIdModel();
+				tariffIdModel.setId(String.valueOf(fare.getTariff()));
+				tariffIdModel.setDiscountId(String.valueOf(fare.getDiscount()));
+				Tariff tariff = new Tariff();
+				tariff.setId(tariffIdModel.asString());
+				tariff.setCancellable(fare.isAllowCancel());
+				tariff.setValue(new BigDecimal(fare.getAmount()).multiply(new BigDecimal("0.01")));
+				tariff.setAvailableCount(fare.getLimit());
+				
+				TariffType type = TariffType.getType(tariff.getId());
+				if (type != null) {
+					tariff.setMinAge(type.getMinAge());
+					tariff.setMaxAge(type.getMaxAge());
+				}
+				tariffs.add(tariff);
+			}
+			return tariffs;
+		} catch (ResponseError e) {
+			throw new RestClientException(e.getMessage());
+		}
 	}
 
 	@Override
 	public List<RequiredField> getRequiredFieldsResponse(String tripId) {
-		// TODO Auto-generated method stub
-		return null;
+		List<RequiredField> requiredFields = new ArrayList<>();
+		requiredFields.add(RequiredField.NAME);
+		requiredFields.add(RequiredField.SURNAME);
+		requiredFields.add(RequiredField.PHONE);
+		requiredFields.add(RequiredField.EMAIL);
+		
+		// проверяем есть остановки на территории РФ
+		TripIdModel idModel = new TripIdModel().create(tripId);
+		try {
+			List<Waypoint> waypoints = client.getCachedWaypoints(idModel.getId());
+			for (Waypoint waypoint : waypoints) {
+				String key = String.valueOf(waypoint.getStop());
+				Locality fromDict = LocalityServiceController.getLocality(key);
+				if (fromDict != null
+						&& Objects.equals("RU", fromDict.getDetails())) {
+					requiredFields.add(RequiredField.GENDER);
+					requiredFields.add(RequiredField.CITIZENSHIP);
+					requiredFields.add(RequiredField.DOCUMENT_TYPE);
+					requiredFields.add(RequiredField.DOCUMENT_NUMBER);
+					requiredFields.add(RequiredField.DOCUMENT_SERIES);
+					requiredFields.add(RequiredField.PATRONYMIC);
+				}
+			}
+		} catch (IOCacheException | ResponseError e) {
+			throw new RestClientException(e.getMessage());
+		}
+		return requiredFields;
 	}
 
 	@Override
 	public List<Seat> updateSeatsResponse(String tripId, List<Seat> seats) {
-		// TODO Auto-generated method stub
-		return null;
+		throw RestTemplateUtil.createUnavailableMethod();
 	}
 
 	@Override
@@ -332,8 +419,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 
 	@Override
 	public List<Document> getDocumentsResponse(String tripId) {
-		// TODO Auto-generated method stub
-		return null;
+		throw RestTemplateUtil.createUnavailableMethod();
 	}
 
 }

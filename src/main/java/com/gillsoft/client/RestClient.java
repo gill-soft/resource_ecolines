@@ -2,7 +2,6 @@ package com.gillsoft.client;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.text.ParseException;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -167,6 +166,10 @@ public class RestClient {
 	
 	public List<Seat> getSeats(String leg) throws ResponseError {
 		return getJourneyDetails(SEATS, "leg", leg, new ParameterizedTypeReference<List<Seat>>() {}); 
+	}
+	
+	public List<Fare> getFares(String journeyId) throws ResponseError {
+		return getJourneyDetails(FARES, journeyId, new ParameterizedTypeReference<List<Fare>>() {});
 	}
 	
 	private <T> T getJourneyDetails(String method, String journeyId, ParameterizedTypeReference<T> typeReference)
