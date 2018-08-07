@@ -1,5 +1,9 @@
 package com.gillsoft.client;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 
@@ -14,7 +18,7 @@ public class Passenger {
 	private String phone;
 	private int tariff;
 	private Integer discount;
-	private int[] seats;
+	private List<Integer> seats;
 	private String email;
 	private String note;
 	private String documentType;
@@ -24,9 +28,9 @@ public class Passenger {
 	private String citizenship;
 	private String gender;
 
-	private long price;
 	private int currency;
-	private long returnAmount;
+	private BigDecimal totalAmount;
+	private BigDecimal returnAmount;
 	private boolean nullifyEnable;
 
 	public String getId() {
@@ -93,11 +97,14 @@ public class Passenger {
 		this.discount = discount;
 	}
 
-	public int[] getSeats() {
+	public List<Integer> getSeats() {
+		if (seats == null) {
+			seats = new ArrayList<>();
+		}
 		return seats;
 	}
 
-	public void setSeats(int[] seats) {
+	public void setSeats(List<Integer> seats) {
 		this.seats = seats;
 	}
 
@@ -165,14 +172,6 @@ public class Passenger {
 		this.gender = gender;
 	}
 
-	public long getPrice() {
-		return price;
-	}
-
-	public void setPrice(long price) {
-		this.price = price;
-	}
-
 	public int getCurrency() {
 		return currency;
 	}
@@ -181,11 +180,19 @@ public class Passenger {
 		this.currency = currency;
 	}
 
-	public long getReturnAmount() {
+	public BigDecimal getTotalAmount() {
+		return totalAmount;
+	}
+
+	public void setTotalAmount(BigDecimal totalAmount) {
+		this.totalAmount = totalAmount;
+	}
+
+	public BigDecimal getReturnAmount() {
 		return returnAmount;
 	}
 
-	public void setReturnAmount(long returnAmount) {
+	public void setReturnAmount(BigDecimal returnAmount) {
 		this.returnAmount = returnAmount;
 	}
 

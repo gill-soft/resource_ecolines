@@ -2,11 +2,13 @@ package com.gillsoft.client;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.http.entity.ContentType;
 import org.apache.logging.log4j.core.util.datetime.FastDateFormat;
@@ -31,7 +33,11 @@ import com.gillsoft.cache.CacheHandler;
 import com.gillsoft.cache.IOCacheException;
 import com.gillsoft.cache.RedisMemoryCache;
 import com.gillsoft.logging.SimpleRequestResponseLoggingInterceptor;
+import com.gillsoft.model.Citizenship;
+import com.gillsoft.model.Customer;
+import com.gillsoft.model.IdentificationDocumentType;
 import com.gillsoft.model.Lang;
+import com.gillsoft.model.ServiceItem;
 import com.gillsoft.util.RestTemplateUtil;
 import com.gillsoft.util.StringUtil;
 
@@ -184,6 +190,137 @@ public class RestClient {
 		return sendRequest(searchTemplate, method, HttpMethod.GET, params, typeReference);
 	}
 	
+	public Booking createBooking(String journeyId, Map<String, Customer> customers, List<ServiceItem> services) throws ResponseError {
+		Booking booking = new Booking();
+		TripIdModel tripIdModel = new TripIdModel().create(journeyId);
+		booking.setJourney(tripIdModel.getId());
+		booking.setCurrency(Integer.parseInt(RestClient.CURR_ID));
+		for (ServiceItem serviceItem : services) {
+			Passenger passenger = null;
+			Customer customer = customers.get(serviceItem.getCustomer().getId());
+			for (Passenger bookingPass : booking.getPassengers()) {
+				if (Objects.equals(bookingPass.getId(), customer.getId())) {
+					passenger = bookingPass;
+				}
+			}
+			if (passenger == null) {
+				passenger = new Passenger();
+				passenger.setId(customer.getId());
+				if (customer.getCitizenship() != null) {
+					passenger.setCitizenship(customer.getCitizenship().toString());
+				}
+				if (customer.getBirthday() != null) {
+					passenger.setDateOfBirth(RestClient.dateFormat.format(customer.getBirthday()));
+				}
+				TariffIdModel tariffIdModel = new TariffIdModel().create(serviceItem.getPrice().getTariff().getId());
+				passenger.setTariff(Integer.parseInt(tariffIdModel.getId()));
+				if (tariffIdModel.getDiscountId() != null) {
+					passenger.setDiscount(Integer.parseInt(tariffIdModel.getDiscountId()));
+				}
+				passenger.setDocumentNumber(customer.getDocumentNumber());
+				passenger.setDocumentSeries(customer.getDocumentSeries());
+				if (customer.getCitizenship() != null
+						&& customer.getDocumentType() != null) {
+					passenger.setDocumentType(getDocType(customer.getCitizenship(), customer.getDocumentType()));
+				}
+				passenger.setEmail(customer.getEmail());
+				passenger.setFirstName(customer.getName());
+				if (customer.getGender() != null) {
+					passenger.setGender(customer.getGender().toString());
+				}
+				passenger.setLastName(customer.getSurname());
+				passenger.setNote(serviceItem.getCustomer().getId());
+				passenger.setPhone(customer.getPhone());
+				booking.getPassengers().add(passenger);
+			}
+			passenger.getSeats().add(Integer.parseInt(serviceItem.getSeat().getId()));
+		}
+		return sendRequest(template, BOOKING, HttpMethod.POST, booking, new LinkedMultiValueMap<>(), new ParameterizedTypeReference<Booking>() {});
+	}
+	
+	public List<Ticket> getBooking(String orderId) throws ResponseError {
+		return sendRequest(template, MessageFormat.format(TICKETS, orderId), HttpMethod.GET,
+				new LinkedMultiValueMap<>(), new ParameterizedTypeReference<List<Ticket>>() {});
+	}
+	
+	public void confirm(String orderId) throws ResponseError {
+		sendRequest(template, MessageFormat.format(CONFIRM_BOOKING, orderId), HttpMethod.POST,
+				new LinkedMultiValueMap<>(), new ParameterizedTypeReference<Object>() {});
+	}
+	
+	public void delete(String orderId) throws ResponseError {
+		sendRequest(template, MessageFormat.format(DEL_BOOKING, orderId), HttpMethod.DELETE,
+				new LinkedMultiValueMap<>(), new ParameterizedTypeReference<Object>() {});
+	}
+	
+	public List<Passenger> preCancel(String orderId, String ticketId) throws ResponseError {
+		return sendRequest(template, MessageFormat.format(CANCELLATIONS, orderId, ticketId), HttpMethod.GET,
+				new LinkedMultiValueMap<>(), new ParameterizedTypeReference<List<Passenger>>() {});
+	}
+	
+	public void confirmCancel(String orderId, String ticketId) throws ResponseError {
+		sendRequest(template, MessageFormat.format(CONFIRM_CANCELLATIONS, orderId, ticketId), HttpMethod.POST,
+				new LinkedMultiValueMap<>(), new ParameterizedTypeReference<Object>() {});
+	}
+	
+	private String getDocType(Citizenship citizenship, IdentificationDocumentType documentType) {
+		switch (documentType) {
+		case FOREIGN_PASSPORT:
+			return citizenship == Citizenship.RU ? "02" : "03"; // заграничный паспорт 
+			
+		case PASSPORT:
+			return citizenship == Citizenship.RU ? "00" : "03"; // паспорт
+			
+		case SEAMAN:
+			return "01"; // Паспорт моряка
+			
+		case BIRTH_CERTIFICATE:
+			return "04"; // Свидетельство о рождении
+			
+		case MILITARY_ID:
+			return "05"; // Удостоверение личности военнослужащего действительной службы
+			
+		case WITHOUT_CITIZENSHIP_ID:
+			return "06"; // Удостоверение личности лица без гражданства
+			
+		case TEMPORARY_CARD:
+			return "07"; // Временное удостоверение личности
+			
+		case MILITARY_CARD:
+			return "08"; // Военный билет военнослужащего срочной службы
+			
+		case RESIDENCE_PERMIT:
+			return "09"; // Вид на жительство
+			
+		case RELEASE_CERTIFICATE:
+			return "10"; // Справка об освобождении из мест лишения свободы
+			
+		case SSSR_PASSPORT:
+			return "11"; // Паспорт гражданина СССР
+			
+		case DIPLOMATIC_PASSPORT:
+			return "12"; // Паспорт дипломатический
+			
+		case SERVICE_PASSPORT:
+			return "13"; // Паспорт служебный 
+			
+		case CIS_RETURN_CERTIFICATE:
+			return "14"; // Свидетельство о возвращении из стран СНГ
+			
+		case LOSS_CERTIFICATE:
+			return "15"; // Справка об утере паспорта
+			
+		case DEPUTY_CARD:
+			return "16"; // Удостоверение депутата
+			
+		case OTHER:
+			return "99"; // Документ не определен
+		
+		default:
+			return "99";
+		}
+	}
+	
 	@SuppressWarnings("unchecked")
 	private <T> T getCachedObject(String key, Runnable task) throws IOCacheException, ResponseError {
 		Map<String, Object> params = new HashMap<>();
@@ -201,8 +338,13 @@ public class RestClient {
 	
 	private <T> T sendRequest(RestTemplate template, String uriMethod, HttpMethod httpMethod,
 			MultiValueMap<String, String> params,  ParameterizedTypeReference<T> typeReference) throws ResponseError {
+		return sendRequest(template, uriMethod, httpMethod, null, params, typeReference);
+	}
+	
+	private <T> T sendRequest(RestTemplate template, String uriMethod, HttpMethod httpMethod, Object request,
+			MultiValueMap<String, String> params,  ParameterizedTypeReference<T> typeReference) throws ResponseError {
 		URI uri = UriComponentsBuilder.fromUriString(Config.getUrl() + uriMethod).queryParams(params).build().toUri();
-		RequestEntity<Object> requestEntity = new RequestEntity<>(headers, httpMethod, uri);
+		RequestEntity<Object> requestEntity = new RequestEntity<>(request, headers, httpMethod, uri);
 		try {
 			ResponseEntity<T> response = searchTemplate.exchange(requestEntity, typeReference);
 			return response.getBody();

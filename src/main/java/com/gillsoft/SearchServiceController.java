@@ -350,7 +350,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 	public List<Tariff> getTariffsResponse(String tripId) {
 		TripIdModel idModel = new TripIdModel().create(tripId);
 		try {
-			List<Fare> fares = client.getFares(idModel.getLegId());
+			List<Fare> fares = client.getFares(idModel.getId());
 			List<Tariff> tariffs = new ArrayList<>(fares.size());
 			for (Fare fare : fares) {
 				TariffIdModel tariffIdModel = new TariffIdModel();
