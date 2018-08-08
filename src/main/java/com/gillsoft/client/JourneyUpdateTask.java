@@ -14,15 +14,17 @@ public class JourneyUpdateTask extends AbstractUpdateTask {
 	private String fromId;
 	private String toId;
 	private Date date;
+	private Date backDate;
 	
 	public JourneyUpdateTask() {
 		
 	}
 
-	public JourneyUpdateTask(String fromId, String toId, Date date) {
+	public JourneyUpdateTask(String fromId, String toId, Date date, Date backDate) {
 		this.fromId = fromId;
 		this.toId = toId;
 		this.date = date;
+		this.backDate = backDate;
 	}
 
 	@Override
@@ -31,7 +33,7 @@ public class JourneyUpdateTask extends AbstractUpdateTask {
 		// получаем рейсы для создания кэша
 		RestClient client = ContextProvider.getBean(RestClient.class);
 		try {
-			List<Journey> journeys = client.getJourneys(fromId, toId, date);
+			List<Journey> journeys = client.getJourneys(fromId, toId, date, backDate);
 			if (journeys != null) {
 				for (Journey journey : journeys) {
 					
@@ -47,12 +49,12 @@ public class JourneyUpdateTask extends AbstractUpdateTask {
 					}
 				}
 			}
-			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date), journeys,
+			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date, backDate), journeys,
 					getTimeToLive(journeys), Config.getCacheTripUpdateDelay());
 		} catch (ResponseError e) {
 
 			// ошибку поиска тоже кладем в кэш но с другим временем жизни
-			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date), e,
+			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date, backDate), e,
 					Config.getCacheErrorTimeToLive(), Config.getCacheErrorUpdateDelay());
 		}
 	}

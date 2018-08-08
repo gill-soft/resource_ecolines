@@ -22,6 +22,7 @@ import org.springframework.web.client.RestClientException;
 import com.gillsoft.abstract_rest_service.SimpleAbstractTripSearchService;
 import com.gillsoft.cache.CacheHandler;
 import com.gillsoft.cache.IOCacheException;
+import com.gillsoft.client.Bound;
 import com.gillsoft.client.CancelRule;
 import com.gillsoft.client.Fare;
 import com.gillsoft.client.Journey;
@@ -76,9 +77,15 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 	@Override
 	public void addInitSearchCallables(List<Callable<SimpleTripSearchPackage<List<Journey>>>> callables, String[] pair,
 			Date date) {
+		addInitSearchCallables(callables, pair, date, null);
+	}
+	
+	@Override
+	public void addInitSearchCallables(List<Callable<SimpleTripSearchPackage<List<Journey>>>> callables, String[] pair,
+			Date date, Date backDate) {
 		callables.add(() -> {
 			SimpleTripSearchPackage<List<Journey>> searchPackage = new SimpleTripSearchPackage<>();
-			searchPackage.setRequest(TripSearchRequest.createRequest(pair, date));
+			searchPackage.setRequest(TripSearchRequest.createRequest(pair, date, backDate));
 			searchJourneys(searchPackage);
 			return searchPackage;
 		});
@@ -91,7 +98,8 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 			List<Journey> journeys = searchPackage.getSearchResult();
 			if (journeys == null) {
 				journeys = client.getCachedJourneys(request.getLocalityPairs().get(0)[0],
-						request.getLocalityPairs().get(0)[1], request.getDates().get(0));
+						request.getLocalityPairs().get(0)[1], request.getDates().get(0),
+						request.getBackDates() != null && !request.getBackDates().isEmpty() ? request.getBackDates().get(0) : null);
 				searchPackage.setSearchResult(new CopyOnWriteArrayList<Journey>());
 				searchPackage.getSearchResult().addAll(journeys);
 			}
@@ -140,14 +148,17 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 			List<Trip> trips = new ArrayList<>();
 			for (int i = result.getSearchResult().size() - 1; i >= 0; i--) {
 				Journey journey = result.getSearchResult().get(i);
-				if (journey.getLegs() != null
-						
-						// только прямые рейсы
-						&& journey.getLegs().size() == 1) {
+				if (journey.getLegs() != null) {
 
 					Trip trip = new Trip();
-					trip.setId(addSegment(localities, organisations, segments, journey, journey.getLegs().get(0)));
+					trip.setId(addSegment(localities, organisations, segments, journey.getId(), journey.getFare(), journey.getOutbound(), journey.getLegs().get(0)));
+					
+					if (journey.getInbound() != null) {
+						trip.setBackId(addSegment(localities, organisations, segments, journey.getId(), 0, journey.getInbound(), journey.getLegs().get(1)));
+					}
 					trips.add(trip);
+					
+					result.getSearchResult().remove(i);
 				}
 			}
 			container.setTrips(trips);
@@ -159,11 +170,13 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 	}
 	
 	private String addSegment(Map<String, Locality> localities, Map<String, Organisation> organisations,
-			Map<String, Segment> segments, Journey journey, Leg leg) {
+			Map<String, Segment> segments, String journeyId, int fare, Bound bound, Leg leg) {
 		
 		TripIdModel idModel = new TripIdModel();
-		idModel.setId(journey.getId());
+		idModel.setId(journeyId);
 		idModel.setLegId(leg.getId());
+		idModel.setFrom(bound.getOrigin());
+		idModel.setTo(bound.getDestination());
 		String id = idModel.asString();
 		
 		Segment segment = new Segment();
@@ -171,27 +184,49 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		segment.setArrivalDate(leg.getArrival());
 		segment.setDeparture(createLocality(localities, leg.getOrigin()));
 		segment.setArrival(createLocality(localities, leg.getDestination()));
-		segment.setCarrier(addOrganisation(organisations, journey.getOutbound().getDisplayCarrierTitle()));
-		addPrice(journey, segment);
+		segment.setCarrier(addOrganisation(organisations, bound.getDisplayCarrierTitle()));
+		addPrice(fare, bound, segment);
 		
 		// добавляем маршрут
 		try {
-			List<Waypoint> waypoints = client.getCachedWaypoints(journey.getId());
-			segment.setRoute(createRoute(localities, waypoints));
+			List<Waypoint> waypoints = client.getCachedWaypoints(journeyId);
+			segment.setRoute(createRoute(localities, waypoints, bound.getOrigin(), bound.getDestination()));
 		} catch (IOCacheException | ResponseError e) {
 		}
 		segments.put(id, segment);
 		return id;
 	}
 	
-	private Route createRoute(Map<String, Locality> localities, List<Waypoint> waypoints) {
+	private Route createRoute(Map<String, Locality> localities, List<Waypoint> waypoints, int from, int to) {
 		if (waypoints != null
 				&& !waypoints.isEmpty()) {
+			
+			// получаем первый и последний индекс пунктов маршрута
+			int fromIndex = 0;
+			int toIndex = 0;
+			if (waypoints.get(0).getStop() == from) {
+				fromIndex = 0;
+				for (int i = 1; i < waypoints.size(); i++) {
+					if (waypoints.get(i).getStop() == to) {
+						toIndex = i;
+						break;
+					}
+				}
+			} else if (waypoints.get(waypoints.size() - 1).getStop() == to) {
+				toIndex = waypoints.size() - 1;
+				for (int i = waypoints.size() - 1; i > 0; i--) {
+					if (waypoints.get(i).getStop() == from) {
+						fromIndex = i;
+						break;
+					}
+				}
+			}
 			Route tripRoute = new Route();
 			tripRoute.setNumber(String.valueOf(waypoints.get(0).getLine()));
 			tripRoute.setPath(new ArrayList<>());
 			LocalDate first = new LocalDate(DateUtils.truncate(waypoints.get(0).getDeparture(), Calendar.DATE));
-			for (Waypoint waypoint : waypoints) {
+			for (int i = fromIndex; i <= toIndex; i++) {
+				Waypoint waypoint = waypoints.get(i);
 				RoutePoint point = new RoutePoint();
 				point.setLocality(createLocality(localities, waypoint.getStop()));
 				if (waypoint.getArrival() != null) {
@@ -210,20 +245,20 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		return null;
 	}
 	
-	private void addPrice(Journey journey, Segment segment) {
+	private void addPrice(int fare, Bound bound, Segment segment) {
 		
 		// тариф
 		Tariff tariff = new Tariff();
 		TariffIdModel idModel = new TariffIdModel();
 		idModel.setId(TariffType.ADULT.getCode());
 		tariff.setId(idModel.asString());
-		tariff.setValue(new BigDecimal(journey.getFare()).multiply(new BigDecimal("0.01")));
+		tariff.setValue(new BigDecimal(fare).multiply(new BigDecimal("0.01")));
 		
-		if (journey.getOutbound().getCancelRules() != null) {
-			tariff.setReturnConditions(new ArrayList<>(journey.getOutbound().getCancelRules().size()));
+		if (bound.getCancelRules() != null) {
+			tariff.setReturnConditions(new ArrayList<>(bound.getCancelRules().size()));
 			
 			// условия возврата
-			for (CancelRule rule : journey.getOutbound().getCancelRules()) {
+			for (CancelRule rule : bound.getCancelRules()) {
 				ReturnCondition condition = new ReturnCondition();
 				condition.setMinutesBeforeDepart(rule.getTimeTill());
 				condition.setReturnPercent(rule.getReturnPercent());
@@ -280,7 +315,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		TripIdModel idModel = new TripIdModel().create(tripId);
 		try {
 			List<Waypoint> waypoints = client.getCachedWaypoints(idModel.getId());
-			return createRoute(null, waypoints);
+			return createRoute(null, waypoints, idModel.getFrom(), idModel.getTo());
 		} catch (IOCacheException | ResponseError e) {
 			throw new RestClientException(e.getMessage());
 		}

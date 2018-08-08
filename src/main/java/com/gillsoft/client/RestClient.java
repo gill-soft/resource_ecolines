@@ -133,12 +133,12 @@ public class RestClient {
 		return sendRequest(searchTemplate, SEGMENT, HttpMethod.GET, null, new ParameterizedTypeReference<List<Segment>>() {});
 	}
 	
-	public List<Journey> getCachedJourneys(String fromId, String toId, Date date)
+	public List<Journey> getCachedJourneys(String fromId, String toId, Date date, Date backDate)
 			throws IOCacheException, ResponseError {
-		return getCachedObject(getJourneysCacheKey(fromId, toId, date), new JourneyUpdateTask(fromId, toId, date));
+		return getCachedObject(getJourneysCacheKey(fromId, toId, date, backDate), new JourneyUpdateTask(fromId, toId, date, backDate));
 	}
 	
-	public List<Journey> getJourneys(String fromId, String toId, Date date) throws ResponseError {
+	public List<Journey> getJourneys(String fromId, String toId, Date date, Date backDate) throws ResponseError {
 		
 		// пока не ищем стыковочных рейсов и раундтрипов
 		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
@@ -149,6 +149,11 @@ public class RestClient {
 		params.add("adults", "1");
 		params.add("applyDiscounts", "0");
 		params.add("directOnly", "1");
+		if (backDate != null) {
+			params.add("inboundDestination", fromId);
+			params.add("inboundOrigin", toId);
+			params.add("inboundDate", dateFormat.format(backDate));
+		}
 		return sendRequest(searchTemplate, JOURNEYS, HttpMethod.GET, params, new ParameterizedTypeReference<List<Journey>>() {});
 	}
 	
@@ -395,8 +400,8 @@ public class RestClient {
 		return LEGS_CACHE_KEY + journeyId;
 	}
 	
-	public static String getJourneysCacheKey(String from, String to, Date date) {
-		return String.join(".", from, to, dateFormat.format(date));
+	public static String getJourneysCacheKey(String from, String to, Date date, Date backDate) {
+		return String.join(".", from, to, dateFormat.format(date), backDate == null ? "" : dateFormat.format(backDate));
 	}
 
 }

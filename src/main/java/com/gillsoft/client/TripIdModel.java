@@ -8,6 +8,8 @@ public class TripIdModel extends AbstractJsonModel {
 
 	private String id;
 	private String legId;
+	private int from;
+	private int to;
 
 	public String getId() {
 		return id;
@@ -23,6 +25,22 @@ public class TripIdModel extends AbstractJsonModel {
 
 	public void setLegId(String legId) {
 		this.legId = legId;
+	}
+
+	public int getFrom() {
+		return from;
+	}
+
+	public void setFrom(int from) {
+		this.from = from;
+	}
+
+	public int getTo() {
+		return to;
+	}
+
+	public void setTo(int to) {
+		this.to = to;
 	}
 
 	@Override
