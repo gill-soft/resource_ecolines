@@ -65,7 +65,7 @@ public class RestClient {
 	private static final String DEL_BOOKING = "bookings/{0}";
 	private static final String CONFIRM_BOOKING = "bookings/{0}/confirmation";
 	private static final String CANCELLATIONS = "bookings/{0}/tickets/{1}/cancellations";
-	private static final String CONFIRM_CANCELLATIONS = "bookings/{0}/tickets/{1}/cancellations/1/confirmation";
+	private static final String CONFIRM_CANCELLATIONS = "bookings/{0}/tickets/{1}/cancellations/{2}/confirmation";
 	
 	public static final int CHILD_AGE = 12;
 	public static final int TEEN_AGE = 18;
@@ -197,20 +197,19 @@ public class RestClient {
 	
 	public Booking createBooking(String journeyId, Map<String, Customer> customers, List<ServiceItem> services) throws ResponseError {
 		Booking booking = new Booking();
-		TripIdModel tripIdModel = new TripIdModel().create(journeyId);
-		booking.setJourney(tripIdModel.getId());
+		booking.setJourney(journeyId);
 		booking.setCurrency(Integer.parseInt(RestClient.CURR_ID));
 		for (ServiceItem serviceItem : services) {
 			Passenger passenger = null;
 			Customer customer = customers.get(serviceItem.getCustomer().getId());
 			for (Passenger bookingPass : booking.getPassengers()) {
-				if (Objects.equals(bookingPass.getId(), customer.getId())) {
+				if (Objects.equals(bookingPass.getTempId(), serviceItem.getCustomer().getId())) {
 					passenger = bookingPass;
 				}
 			}
 			if (passenger == null) {
 				passenger = new Passenger();
-				passenger.setId(customer.getId());
+				passenger.setTempId(serviceItem.getCustomer().getId());
 				if (customer.getCitizenship() != null) {
 					passenger.setCitizenship(customer.getCitizenship().toString());
 				}
@@ -263,8 +262,8 @@ public class RestClient {
 				new LinkedMultiValueMap<>(), new ParameterizedTypeReference<List<Passenger>>() {});
 	}
 	
-	public void confirmCancel(String orderId, String ticketId) throws ResponseError {
-		sendRequest(template, MessageFormat.format(CONFIRM_CANCELLATIONS, orderId, ticketId), HttpMethod.POST,
+	public void confirmCancel(String orderId, String ticketId, int part) throws ResponseError {
+		sendRequest(template, MessageFormat.format(CONFIRM_CANCELLATIONS, orderId, ticketId, part), HttpMethod.POST,
 				new LinkedMultiValueMap<>(), new ParameterizedTypeReference<Object>() {});
 	}
 	

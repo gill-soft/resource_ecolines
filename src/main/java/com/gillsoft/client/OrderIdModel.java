@@ -12,7 +12,7 @@ public class OrderIdModel extends AbstractJsonModel {
 	private static final long serialVersionUID = 4318484251645220464L;
 
 	private List<String> ids;
-	private Map<String, List<String>> tickets;
+	private Map<String, List<TicketIdModel>> tickets;
 
 	public OrderIdModel() {
 		
@@ -29,19 +29,19 @@ public class OrderIdModel extends AbstractJsonModel {
 		this.ids = ids;
 	}
 
-	public Map<String, List<String>> getTickets() {
+	public Map<String, List<TicketIdModel>> getTickets() {
 		if (tickets == null) {
 			tickets = new HashMap<>();
 		}
 		return tickets;
 	}
 
-	public void setTickets(Map<String, List<String>> tickets) {
+	public void setTickets(Map<String, List<TicketIdModel>> tickets) {
 		this.tickets = tickets;
 	}
 	
-	public List<String> getTickets(String id) {
-		List<String> ids = getTickets().get(id);
+	public List<TicketIdModel> getTickets(String id) {
+		List<TicketIdModel> ids = getTickets().get(id);
 		if (ids == null) {
 			ids = new ArrayList<>();
 			getTickets().put(id, ids);

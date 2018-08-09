@@ -4,13 +4,17 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 
 @JsonInclude(Include.NON_NULL)
 public class Passenger {
 
-	private String id;
+	@JsonIgnore
+	private String tempId;
+	
+	private int id;
 	private String journey;
 	private String status;
 	private String firstName;
@@ -28,16 +32,26 @@ public class Passenger {
 	private String citizenship;
 	private String gender;
 
+	private int origin;
+	private int destination;
 	private int currency;
 	private BigDecimal totalAmount;
 	private BigDecimal returnAmount;
 	private boolean nullifyEnable;
 
-	public String getId() {
+	public String getTempId() {
+		return tempId;
+	}
+
+	public void setTempId(String tempId) {
+		this.tempId = tempId;
+	}
+
+	public int getId() {
 		return id;
 	}
 
-	public void setId(String id) {
+	public void setId(int id) {
 		this.id = id;
 	}
 
@@ -170,6 +184,22 @@ public class Passenger {
 
 	public void setGender(String gender) {
 		this.gender = gender;
+	}
+
+	public int getOrigin() {
+		return origin;
+	}
+
+	public void setOrigin(int origin) {
+		this.origin = origin;
+	}
+
+	public int getDestination() {
+		return destination;
+	}
+
+	public void setDestination(int destination) {
+		this.destination = destination;
 	}
 
 	public int getCurrency() {

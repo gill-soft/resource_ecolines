@@ -151,10 +151,17 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 				if (journey.getLegs() != null) {
 
 					Trip trip = new Trip();
-					trip.setId(addSegment(localities, organisations, segments, journey.getId(), journey.getFare(), journey.getOutbound(), journey.getLegs().get(0)));
 					
 					if (journey.getInbound() != null) {
-						trip.setBackId(addSegment(localities, organisations, segments, journey.getId(), 0, journey.getInbound(), journey.getLegs().get(1)));
+						BigDecimal halfFare = new BigDecimal(journey.getFare()).multiply(new BigDecimal("0.005"));
+						trip.setId(addSegment(localities, organisations, segments, journey.getId(),
+								halfFare, journey.getOutbound(), journey.getLegs().get(0), 1));
+						trip.setBackId(addSegment(localities, organisations, segments, journey.getId(),
+								halfFare, journey.getInbound(), journey.getLegs().get(1), 2));
+					} else {
+						trip.setId(addSegment(localities, organisations, segments, journey.getId(),
+								new BigDecimal(journey.getFare()).multiply(new BigDecimal("0.01")),
+								journey.getOutbound(), journey.getLegs().get(0), 1));
 					}
 					trips.add(trip);
 					
@@ -170,13 +177,14 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 	}
 	
 	private String addSegment(Map<String, Locality> localities, Map<String, Organisation> organisations,
-			Map<String, Segment> segments, String journeyId, int fare, Bound bound, Leg leg) {
+			Map<String, Segment> segments, String journeyId, BigDecimal fare, Bound bound, Leg leg, int part) {
 		
 		TripIdModel idModel = new TripIdModel();
 		idModel.setId(journeyId);
 		idModel.setLegId(leg.getId());
 		idModel.setFrom(bound.getOrigin());
 		idModel.setTo(bound.getDestination());
+		idModel.setPart(part);
 		String id = idModel.asString();
 		
 		Segment segment = new Segment();
@@ -245,14 +253,14 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		return null;
 	}
 	
-	private void addPrice(int fare, Bound bound, Segment segment) {
+	private void addPrice(BigDecimal fare, Bound bound, Segment segment) {
 		
 		// тариф
 		Tariff tariff = new Tariff();
 		TariffIdModel idModel = new TariffIdModel();
 		idModel.setId(TariffType.ADULT.getCode());
 		tariff.setId(idModel.asString());
-		tariff.setValue(new BigDecimal(fare).multiply(new BigDecimal("0.01")));
+		tariff.setValue(fare);
 		
 		if (bound.getCancelRules() != null) {
 			tariff.setReturnConditions(new ArrayList<>(bound.getCancelRules().size()));

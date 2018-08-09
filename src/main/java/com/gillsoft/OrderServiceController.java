@@ -19,6 +19,7 @@ import com.gillsoft.client.ResponseError;
 import com.gillsoft.client.RestClient;
 import com.gillsoft.client.Ticket;
 import com.gillsoft.client.TicketIdModel;
+import com.gillsoft.client.TripIdModel;
 import com.gillsoft.model.Currency;
 import com.gillsoft.model.Price;
 import com.gillsoft.model.RestError;
@@ -54,12 +55,20 @@ public class OrderServiceController extends AbstractOrderService {
 				for (Ticket ticket : tickets) {
 					for (ServiceItem item : order.getValue()) {
 						if (Objects.equals(ticket.getNote(), item.getCustomer().getId())) {
-							item.getPrice().getTariff().setValue(ticket.getPrice().multiply(new BigDecimal("0.01")));
+							TripIdModel tripIdModel = new TripIdModel().create(item.getSegment().getId());
+							BigDecimal price = null;
+							if (tripIdModel.getPart() != 0) {
+								price = ticket.getPrice().multiply(new BigDecimal("0.005"));
+							} else {
+								price = ticket.getPrice().multiply(new BigDecimal("0.01"));
+							}
+							item.getPrice().getTariff().setValue(price);
 							item.getPrice().setAmount(item.getPrice().getTariff().getValue());
 							item.getPrice().setCurrency(Currency.UAH);
-							item.setId(new TicketIdModel(booking.getId(), ticket.getId()).asString());
+							TicketIdModel ticketIdModel = new TicketIdModel(booking.getId(), ticket.getId(), tripIdModel.getFrom(), tripIdModel.getTo());
+							item.setId(ticketIdModel.asString());
 							item.setNumber(ticket.getId());
-							orderId.getTickets(booking.getId()).add(ticket.getId());
+							orderId.getTickets(booking.getId()).add(ticketIdModel);
 						}
 					}
 				}
@@ -80,7 +89,8 @@ public class OrderServiceController extends AbstractOrderService {
 	private Map<String, List<ServiceItem>> groupeByTripId(OrderRequest request) {
 		Map<String, List<ServiceItem>> trips = new HashMap<>();
 		for (ServiceItem item : request.getServices()) {
-			String tripId = item.getSegment().getId();
+			TripIdModel tripIdModel = new TripIdModel().create(item.getSegment().getId());
+			String tripId = tripIdModel.getId();
 			List<ServiceItem> items = trips.get(tripId);
 			if (items == null) {
 				items = new ArrayList<>();
@@ -150,11 +160,11 @@ public class OrderServiceController extends AbstractOrderService {
 		return response;
 	}
 	
-	private void addServiceItems(List<ServiceItem> resultItems, String orderId, List<String> ticketIds,
+	private void addServiceItems(List<ServiceItem> resultItems, String orderId, List<TicketIdModel> ticketIds,
 			boolean confirmed, RestError error) {
-		for (String id : ticketIds) {
+		for (TicketIdModel id : ticketIds) {
 			ServiceItem serviceItem = new ServiceItem();
-			serviceItem.setId(new TicketIdModel(orderId, id).asString());
+			serviceItem.setId(id.asString());
 			serviceItem.setConfirmed(confirmed);
 			serviceItem.setError(error);
 			resultItems.add(serviceItem);
@@ -186,19 +196,25 @@ public class OrderServiceController extends AbstractOrderService {
 					
 				// иначе проверяем возможность 100% возврата
 				} else {
-					for (String ticketId : orderIdModel.getTickets(id)) {
-						List<Passenger> passengers = client.preCancel(id, ticketId);
+					for (TicketIdModel idModel : orderIdModel.getTickets(id)) {
+						List<Passenger> passengers = client.preCancel(id, idModel.getId());
+						int part = 0;
 						for (Passenger passenger : passengers) {
-							if (!passenger.isNullifyEnable()
-									|| passenger.getReturnAmount().compareTo(passenger.getTotalAmount()) != 0) {
-								throw new ResponseError("Cancellation is disabled");
+							if (passenger.getOrigin() == idModel.getFrom()
+									&& passenger.getDestination() == idModel.getTo()) {
+								if (!passenger.isNullifyEnable()
+											|| passenger.getReturnAmount().compareTo(passenger.getTotalAmount()) != 0) {
+									throw new ResponseError("Cancellation is disabled");
+								}
+								part = passenger.getId();
+								break;
 							}
 						}
 						// возвращаем 100%
 						ServiceItem serviceItem = new ServiceItem();
-						serviceItem.setId(new TicketIdModel(id, ticketId).asString());
+						serviceItem.setId(idModel.asString());
 						try {
-							client.confirmCancel(id, ticketId);
+							client.confirmCancel(id, idModel.getId(), part);
 							serviceItem.setConfirmed(true);
 						} catch (ResponseError e) {
 							serviceItem.setError(new RestError(e.getMessage()));
@@ -217,37 +233,37 @@ public class OrderServiceController extends AbstractOrderService {
 
 	@Override
 	public OrderResponse prepareReturnServicesResponse(OrderRequest request) {
+		return returnServices(request, false);
+	}
+
+	@Override
+	public OrderResponse returnServicesResponse(OrderRequest request) {
+		return returnServices(request, true);
+	}
+	
+	public OrderResponse returnServices(OrderRequest request, boolean confirm) {
 		OrderResponse response = new OrderResponse();
 		response.setServices(new ArrayList<>(request.getServices().size()));
 		for (ServiceItem serviceItem : request.getServices()) {
 			TicketIdModel idModel = new TicketIdModel().create(serviceItem.getId());
 			try {
 				List<Passenger> passengers = client.preCancel(idModel.getOrderId(), idModel.getId());
-				if (passengers.isEmpty()
-						|| !passengers.get(0).isNullifyEnable()) {
-					throw new ResponseError("Return is disabled");
+				for (Passenger passenger : passengers) {
+					if (passenger.getOrigin() == idModel.getFrom()
+							&& passenger.getDestination() == idModel.getTo()) {
+						if (!passenger.isNullifyEnable()) {
+							throw new ResponseError("Return is disabled");
+						}
+						if (confirm) {
+							client.confirmCancel(idModel.getOrderId(), idModel.getId(), passenger.getId());
+							serviceItem.setConfirmed(true);
+						}
+						Price price = new Price();
+						price.setCurrency(Currency.UAH);
+						price.setAmount(passengers.get(0).getReturnAmount().multiply(new BigDecimal("0.01")));
+						serviceItem.setPrice(price);
+					}
 				}
-				Price price = new Price();
-				price.setCurrency(Currency.UAH);
-				price.setAmount(passengers.get(0).getReturnAmount().multiply(new BigDecimal("0.01")));
-				serviceItem.setPrice(price);
-			} catch (ResponseError e) {
-				serviceItem.setError(new RestError(e.getMessage()));
-			}
-			response.getServices().add(serviceItem);
-		}
-		return response;
-	}
-
-	@Override
-	public OrderResponse returnServicesResponse(OrderRequest request) {
-		OrderResponse response = new OrderResponse();
-		response.setServices(new ArrayList<>(request.getServices().size()));
-		for (ServiceItem serviceItem : request.getServices()) {
-			TicketIdModel idModel = new TicketIdModel().create(serviceItem.getId());
-			try {
-				client.confirmCancel(idModel.getOrderId(), idModel.getId());
-				serviceItem.setConfirmed(true);
 			} catch (ResponseError e) {
 				serviceItem.setError(new RestError(e.getMessage()));
 			}
