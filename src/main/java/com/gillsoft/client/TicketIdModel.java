@@ -10,16 +10,18 @@ public class TicketIdModel extends AbstractJsonModel {
 	private String id;
 	private int from;
 	private int to;
+	private String currency;
 	
 	public TicketIdModel() {
 		
 	}
 
-	public TicketIdModel(String orderId, String id, int from, int to) {
+	public TicketIdModel(String orderId, String id, int from, int to, String currency) {
 		this.orderId = orderId;
 		this.id = id;
 		this.from = from;
 		this.to = to;
+		this.currency = currency;
 	}
 
 	public String getOrderId() {
@@ -52,6 +54,14 @@ public class TicketIdModel extends AbstractJsonModel {
 
 	public void setTo(int to) {
 		this.to = to;
+	}
+
+	public String getCurrency() {
+		return currency;
+	}
+
+	public void setCurrency(String currency) {
+		this.currency = currency;
 	}
 
 	@Override

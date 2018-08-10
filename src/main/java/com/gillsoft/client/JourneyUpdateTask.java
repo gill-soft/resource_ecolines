@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.gillsoft.cache.AbstractUpdateTask;
 import com.gillsoft.cache.IOCacheException;
+import com.gillsoft.model.Currency;
 import com.gillsoft.util.ContextProvider;
 
 public class JourneyUpdateTask extends AbstractUpdateTask {
@@ -15,16 +16,18 @@ public class JourneyUpdateTask extends AbstractUpdateTask {
 	private String toId;
 	private Date date;
 	private Date backDate;
+	private Currency currency;
 	
 	public JourneyUpdateTask() {
 		
 	}
 
-	public JourneyUpdateTask(String fromId, String toId, Date date, Date backDate) {
+	public JourneyUpdateTask(String fromId, String toId, Date date, Date backDate, Currency currency) {
 		this.fromId = fromId;
 		this.toId = toId;
 		this.date = date;
 		this.backDate = backDate;
+		this.currency = currency;
 	}
 
 	@Override
@@ -33,7 +36,7 @@ public class JourneyUpdateTask extends AbstractUpdateTask {
 		// получаем рейсы для создания кэша
 		RestClient client = ContextProvider.getBean(RestClient.class);
 		try {
-			List<Journey> journeys = client.getJourneys(fromId, toId, date, backDate);
+			List<Journey> journeys = client.getJourneys(fromId, toId, date, backDate, currency);
 			if (journeys != null) {
 				for (Journey journey : journeys) {
 					
@@ -49,13 +52,13 @@ public class JourneyUpdateTask extends AbstractUpdateTask {
 					}
 				}
 			}
-			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date, backDate), journeys,
-					getTimeToLive(journeys), Config.getCacheTripUpdateDelay());
+			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date, backDate, client.getCurrency(currency)),
+					journeys, getTimeToLive(journeys), Config.getCacheTripUpdateDelay());
 		} catch (ResponseError e) {
 
 			// ошибку поиска тоже кладем в кэш но с другим временем жизни
-			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date, backDate), e,
-					Config.getCacheErrorTimeToLive(), Config.getCacheErrorUpdateDelay());
+			writeObject(client.getCache(), RestClient.getJourneysCacheKey(fromId, toId, date, backDate, client.getCurrency(currency)),
+					e, Config.getCacheErrorTimeToLive(), Config.getCacheErrorUpdateDelay());
 		}
 	}
 	

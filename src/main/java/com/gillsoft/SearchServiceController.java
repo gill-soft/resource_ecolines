@@ -3,7 +3,6 @@ package com.gillsoft;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,17 +74,10 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 	}
 	
 	@Override
-	public void addInitSearchCallables(List<Callable<SimpleTripSearchPackage<List<Journey>>>> callables, String[] pair,
-			Date date) {
-		addInitSearchCallables(callables, pair, date, null);
-	}
-	
-	@Override
-	public void addInitSearchCallables(List<Callable<SimpleTripSearchPackage<List<Journey>>>> callables, String[] pair,
-			Date date, Date backDate) {
+	public void addInitSearchCallables(List<Callable<SimpleTripSearchPackage<List<Journey>>>> callables, TripSearchRequest request) {
 		callables.add(() -> {
 			SimpleTripSearchPackage<List<Journey>> searchPackage = new SimpleTripSearchPackage<>();
-			searchPackage.setRequest(TripSearchRequest.createRequest(pair, date, backDate));
+			searchPackage.setRequest(request);
 			searchJourneys(searchPackage);
 			return searchPackage;
 		});
@@ -99,7 +91,8 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 			if (journeys == null) {
 				journeys = client.getCachedJourneys(request.getLocalityPairs().get(0)[0],
 						request.getLocalityPairs().get(0)[1], request.getDates().get(0),
-						request.getBackDates() != null && !request.getBackDates().isEmpty() ? request.getBackDates().get(0) : null);
+						request.getBackDates() != null && !request.getBackDates().isEmpty() ? request.getBackDates().get(0) : null,
+						request.getCurrency());
 				searchPackage.setSearchResult(new CopyOnWriteArrayList<Journey>());
 				searchPackage.getSearchResult().addAll(journeys);
 			}
@@ -155,13 +148,13 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 					if (journey.getInbound() != null) {
 						BigDecimal halfFare = new BigDecimal(journey.getFare()).multiply(new BigDecimal("0.005"));
 						trip.setId(addSegment(localities, organisations, segments, journey.getId(),
-								halfFare, journey.getOutbound(), journey.getLegs().get(0), 1));
+								halfFare, journey.getOutbound(), journey.getLegs().get(0), 1, result.getRequest().getCurrency()));
 						trip.setBackId(addSegment(localities, organisations, segments, journey.getId(),
-								halfFare, journey.getInbound(), journey.getLegs().get(1), 2));
+								halfFare, journey.getInbound(), journey.getLegs().get(1), 2, result.getRequest().getCurrency()));
 					} else {
 						trip.setId(addSegment(localities, organisations, segments, journey.getId(),
 								new BigDecimal(journey.getFare()).multiply(new BigDecimal("0.01")),
-								journey.getOutbound(), journey.getLegs().get(0), 1));
+								journey.getOutbound(), journey.getLegs().get(0), 1, result.getRequest().getCurrency()));
 					}
 					trips.add(trip);
 					
@@ -177,7 +170,8 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 	}
 	
 	private String addSegment(Map<String, Locality> localities, Map<String, Organisation> organisations,
-			Map<String, Segment> segments, String journeyId, BigDecimal fare, Bound bound, Leg leg, int part) {
+			Map<String, Segment> segments, String journeyId, BigDecimal fare, Bound bound, Leg leg, int part,
+			Currency currency) {
 		
 		TripIdModel idModel = new TripIdModel();
 		idModel.setId(journeyId);
@@ -185,6 +179,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		idModel.setFrom(bound.getOrigin());
 		idModel.setTo(bound.getDestination());
 		idModel.setPart(part);
+		idModel.setCurrency(client.getCurrency(currency));
 		String id = idModel.asString();
 		
 		Segment segment = new Segment();
@@ -193,7 +188,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		segment.setDeparture(createLocality(localities, leg.getOrigin()));
 		segment.setArrival(createLocality(localities, leg.getDestination()));
 		segment.setCarrier(addOrganisation(organisations, bound.getDisplayCarrierTitle()));
-		addPrice(fare, bound, segment);
+		addPrice(fare, bound, segment, idModel.getCurrency());
 		
 		// добавляем маршрут
 		try {
@@ -253,7 +248,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		return null;
 	}
 	
-	private void addPrice(BigDecimal fare, Bound bound, Segment segment) {
+	private void addPrice(BigDecimal fare, Bound bound, Segment segment, String currCode) {
 		
 		// тариф
 		Tariff tariff = new Tariff();
@@ -275,7 +270,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		}
 		// стоимость
 		Price tripPrice = new Price();
-		tripPrice.setCurrency(Currency.UAH);
+		tripPrice.setCurrency(client.getCurrency(currCode));
 		tripPrice.setAmount(tariff.getValue());
 		tripPrice.setTariff(tariff);
 		
@@ -393,7 +388,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 	public List<Tariff> getTariffsResponse(String tripId) {
 		TripIdModel idModel = new TripIdModel().create(tripId);
 		try {
-			List<Fare> fares = client.getFares(idModel.getId());
+			List<Fare> fares = client.getFares(idModel.getId(), idModel.getCurrency());
 			List<Tariff> tariffs = new ArrayList<>(fares.size());
 			for (Fare fare : fares) {
 				TariffIdModel tariffIdModel = new TariffIdModel();

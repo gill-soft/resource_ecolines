@@ -34,6 +34,7 @@ import com.gillsoft.cache.IOCacheException;
 import com.gillsoft.cache.RedisMemoryCache;
 import com.gillsoft.logging.SimpleRequestResponseLoggingInterceptor;
 import com.gillsoft.model.Citizenship;
+import com.gillsoft.model.Currency;
 import com.gillsoft.model.Customer;
 import com.gillsoft.model.IdentificationDocumentType;
 import com.gillsoft.model.Lang;
@@ -50,8 +51,6 @@ public class RestClient {
 	public static final String JOURNEYS_CACHE_KEY = "ecolines.journeys.";
 	public static final String WAYPOINTS_CACHE_KEY = "ecolines.waypoints.";
 	public static final String LEGS_CACHE_KEY = "ecolines.legs.";
-	
-	public static final String CURR_ID = "31"; // по договору UAH
 
 	private static final String STOP = "stops";
 	private static final String SEGMENT = "segments";
@@ -133,19 +132,20 @@ public class RestClient {
 		return sendRequest(searchTemplate, SEGMENT, HttpMethod.GET, null, new ParameterizedTypeReference<List<Segment>>() {});
 	}
 	
-	public List<Journey> getCachedJourneys(String fromId, String toId, Date date, Date backDate)
+	public List<Journey> getCachedJourneys(String fromId, String toId, Date date, Date backDate, Currency currency)
 			throws IOCacheException, ResponseError {
-		return getCachedObject(getJourneysCacheKey(fromId, toId, date, backDate), new JourneyUpdateTask(fromId, toId, date, backDate));
+		return getCachedObject(getJourneysCacheKey(fromId, toId, date, backDate, getCurrency(currency)),
+				new JourneyUpdateTask(fromId, toId, date, backDate, currency));
 	}
 	
-	public List<Journey> getJourneys(String fromId, String toId, Date date, Date backDate) throws ResponseError {
+	public List<Journey> getJourneys(String fromId, String toId, Date date, Date backDate, Currency currency) throws ResponseError {
 		
 		// пока не ищем стыковочных рейсов и раундтрипов
 		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
 		params.add("outboundOrigin", fromId);
 		params.add("outboundDestination", toId);
 		params.add("outboundDate", dateFormat.format(date));
-		params.add("currency", CURR_ID);
+		params.add("currency", getCurrency(currency));
 		params.add("adults", "1");
 		params.add("applyDiscounts", "0");
 		params.add("directOnly", "1");
@@ -179,8 +179,11 @@ public class RestClient {
 		return getJourneyDetails(SEATS, "leg", leg, new ParameterizedTypeReference<List<Seat>>() {}); 
 	}
 	
-	public List<Fare> getFares(String journeyId) throws ResponseError {
-		return getJourneyDetails(FARES, journeyId, new ParameterizedTypeReference<List<Fare>>() {});
+	public List<Fare> getFares(String journeyId, String currency) throws ResponseError {
+		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+		params.add("journey", journeyId);
+		params.add("currency", currency);
+		return sendRequest(searchTemplate, FARES, HttpMethod.GET, params, new ParameterizedTypeReference<List<Fare>>() {});
 	}
 	
 	private <T> T getJourneyDetails(String method, String journeyId, ParameterizedTypeReference<T> typeReference)
@@ -198,7 +201,7 @@ public class RestClient {
 	public Booking createBooking(String journeyId, Map<String, Customer> customers, List<ServiceItem> services) throws ResponseError {
 		Booking booking = new Booking();
 		booking.setJourney(journeyId);
-		booking.setCurrency(Integer.parseInt(RestClient.CURR_ID));
+		booking.setCurrency(Integer.parseInt(getCurrency(services.get(0).getPrice().getCurrency())));
 		for (ServiceItem serviceItem : services) {
 			Passenger passenger = null;
 			Customer customer = customers.get(serviceItem.getCustomer().getId());
@@ -387,6 +390,51 @@ public class RestClient {
 		}
 	}
 	
+	public String getCurrency(Currency currency) {
+		if (currency == null) {
+			return Config.getCurrency();
+		}
+		switch (currency) {
+		case UAH:
+			return "31";
+		case RUR:
+			return "12";
+		case PLN:
+			return "35";
+		case EUR:
+			return "11";
+		case BGN:
+			return "41";
+		case CZK:
+			return "32";
+		case GBP:
+			return "9";
+		default:
+			return Config.getCurrency();
+		}
+	}
+	
+	public Currency getCurrency(String currency) {
+		switch (currency) {
+		case "31":
+			return Currency.UAH;
+		case "12":
+			return Currency.RUR;
+		case "35":
+			return Currency.PLN;
+		case "11":
+			return Currency.EUR;
+		case "41":
+			return Currency.BGN;
+		case "32":
+			return Currency.CZK;
+		case "9":
+			return Currency.GBP;
+		default:
+			return null;
+		}
+	}
+	
 	public static String getStopsCacheKey(Lang lang) {
 		return STOPS_CACHE_KEY + lang.toString();
 	}
@@ -399,8 +447,8 @@ public class RestClient {
 		return LEGS_CACHE_KEY + journeyId;
 	}
 	
-	public static String getJourneysCacheKey(String from, String to, Date date, Date backDate) {
-		return String.join(".", from, to, dateFormat.format(date), backDate == null ? "" : dateFormat.format(backDate));
+	public static String getJourneysCacheKey(String from, String to, Date date, Date backDate, String currency) {
+		return String.join(".", from, to, dateFormat.format(date), backDate == null ? "" : dateFormat.format(backDate), currency);
 	}
 
 }

@@ -11,6 +11,7 @@ public class TripIdModel extends AbstractJsonModel {
 	private int from;
 	private int to;
 	private int part; // 0 - когда рейс в одну сторону и без пересадки, 1 .. N - номер части поездки
+	private String currency;
 
 	public String getId() {
 		return id;
@@ -50,6 +51,14 @@ public class TripIdModel extends AbstractJsonModel {
 
 	public void setPart(int part) {
 		this.part = part;
+	}
+
+	public String getCurrency() {
+		return currency;
+	}
+
+	public void setCurrency(String currency) {
+		this.currency = currency;
 	}
 
 	@Override

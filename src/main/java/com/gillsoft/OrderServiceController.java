@@ -20,7 +20,6 @@ import com.gillsoft.client.RestClient;
 import com.gillsoft.client.Ticket;
 import com.gillsoft.client.TicketIdModel;
 import com.gillsoft.client.TripIdModel;
-import com.gillsoft.model.Currency;
 import com.gillsoft.model.Price;
 import com.gillsoft.model.RestError;
 import com.gillsoft.model.ServiceItem;
@@ -64,8 +63,9 @@ public class OrderServiceController extends AbstractOrderService {
 							}
 							item.getPrice().getTariff().setValue(price);
 							item.getPrice().setAmount(item.getPrice().getTariff().getValue());
-							item.getPrice().setCurrency(Currency.UAH);
-							TicketIdModel ticketIdModel = new TicketIdModel(booking.getId(), ticket.getId(), tripIdModel.getFrom(), tripIdModel.getTo());
+							item.getPrice().setCurrency(client.getCurrency(tripIdModel.getCurrency()));
+							TicketIdModel ticketIdModel = new TicketIdModel(booking.getId(), ticket.getId(),
+									tripIdModel.getFrom(), tripIdModel.getTo(), tripIdModel.getCurrency());
 							item.setId(ticketIdModel.asString());
 							item.setNumber(ticket.getId());
 							orderId.getTickets(booking.getId()).add(ticketIdModel);
@@ -259,7 +259,7 @@ public class OrderServiceController extends AbstractOrderService {
 							serviceItem.setConfirmed(true);
 						}
 						Price price = new Price();
-						price.setCurrency(Currency.UAH);
+						price.setCurrency(client.getCurrency(idModel.getCurrency()));
 						price.setAmount(passengers.get(0).getReturnAmount().multiply(new BigDecimal("0.01")));
 						serviceItem.setPrice(price);
 					}

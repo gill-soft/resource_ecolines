@@ -68,4 +68,8 @@ public class Config {
 		return Long.valueOf(properties.getProperty("cache.route.update.delay"));
 	}
 	
+	public static String getCurrency() {
+		return properties.getProperty("default.currency");
+	}
+	
 }
