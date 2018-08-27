@@ -353,7 +353,7 @@ public class RestClient {
 		URI uri = UriComponentsBuilder.fromUriString(Config.getUrl() + uriMethod).queryParams(params).build().toUri();
 		RequestEntity<Object> requestEntity = new RequestEntity<>(request, headers, httpMethod, uri);
 		try {
-			ResponseEntity<T> response = searchTemplate.exchange(requestEntity, typeReference);
+			ResponseEntity<T> response = template.exchange(requestEntity, typeReference);
 			return response.getBody();
 		} catch (RestClientException e) {
 			throw new ResponseError(e.getMessage());
