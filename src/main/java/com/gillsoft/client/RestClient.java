@@ -391,27 +391,7 @@ public class RestClient {
 	}
 	
 	public String getCurrency(Currency currency) {
-		if (currency == null) {
-			return Config.getCurrency();
-		}
-		switch (currency) {
-		case UAH:
-			return "31";
-		case RUR:
-			return "12";
-		case PLN:
-			return "35";
-		case EUR:
-			return "11";
-		case BGN:
-			return "41";
-		case CZK:
-			return "32";
-		case GBP:
-			return "9";
-		default:
-			return Config.getCurrency();
-		}
+		return Config.getCurrency();
 	}
 	
 	public Currency getCurrency(String currency) {

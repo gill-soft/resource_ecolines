@@ -96,7 +96,7 @@ public class OrderServiceController extends AbstractOrderService {
 				items = new ArrayList<>();
 				trips.put(tripId, items);
 			}
-			if (items.size() == 10) {
+			if (items.size() == 3) {
 				trips.put(String.join(";", tripId, StringUtil.generateUUID()), trips.get(tripId));
 				items = new ArrayList<>();
 				trips.put(tripId, items);
