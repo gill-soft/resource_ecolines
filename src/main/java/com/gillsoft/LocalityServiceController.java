@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -20,7 +21,6 @@ import com.gillsoft.client.Stop;
 import com.gillsoft.model.Lang;
 import com.gillsoft.model.Locality;
 import com.gillsoft.model.request.LocalityRequest;
-import com.google.common.base.Objects;
 
 @RestController
 public class LocalityServiceController extends AbstractLocalityService {
@@ -132,7 +132,7 @@ public class LocalityServiceController extends AbstractLocalityService {
 			return null;
 		}
 		for (Locality locality : all) {
-			if (Objects.equal(id, locality.getId())) {
+			if (Objects.equals(id, locality.getId())) {
 				return locality;
 			}
 		}
