@@ -226,7 +226,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 			}
 			Route tripRoute = new Route();
 			tripRoute.setNumber(String.valueOf(waypoints.get(0).getLine()));
-			tripRoute.setPath(new ArrayList<>());
+			List<RoutePoint> path = new ArrayList<>();
 			LocalDate first = new LocalDate(DateUtils.truncate(waypoints.get(0).getDeparture(), Calendar.DATE));
 			for (int i = fromIndex; i <= toIndex; i++) {
 				Waypoint waypoint = waypoints.get(i);
@@ -241,8 +241,9 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 					point.setDepartureTime(RestClient.timeFormat.format(waypoint.getDeparture()));
 				}
 				point.setPlatform(waypoint.getPlatform());
-				tripRoute.getPath().add(point);
+				path.add(point);
 			}
+			tripRoute.setPath(path);
 			return tripRoute;
 		}
 		return null;
@@ -420,6 +421,8 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 		requiredFields.add(RequiredField.SURNAME);
 		requiredFields.add(RequiredField.PHONE);
 		requiredFields.add(RequiredField.EMAIL);
+		requiredFields.add(RequiredField.TARIFF);
+		requiredFields.add(RequiredField.SEAT);
 		
 		// проверяем есть остановки на территории РФ
 		TripIdModel idModel = new TripIdModel().create(tripId);

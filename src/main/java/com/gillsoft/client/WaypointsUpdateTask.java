@@ -36,7 +36,7 @@ public class WaypointsUpdateTask extends AbstractUpdateTask {
 	}
 	
 	@SuppressWarnings("unchecked")
-	protected Date getTimeToLiveDate(Object cached) {
+	protected Date getTimeToLiveDate(Object cached) throws ResponseError {
 		List<Waypoint> waypoints = (List<Waypoint>) cached;
 		Date max = null;
 		for (Waypoint waypoint : waypoints) {
@@ -45,6 +45,9 @@ public class WaypointsUpdateTask extends AbstractUpdateTask {
 						&& max.getTime() < waypoint.getArrival().getTime())) {
 				max = waypoint.getArrival();
 			}
+		}
+		if (max == null) {
+			throw new ResponseError("Invalid time to live");
 		}
 		return max;
 	}

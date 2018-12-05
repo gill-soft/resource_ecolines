@@ -63,7 +63,7 @@ public class JourneyUpdateTask extends AbstractUpdateTask {
 	}
 	
 	// время жизни до момента самого позднего отправления
-	private long getTimeToLive(List<Journey> journeys) {
+	private long getTimeToLive(List<Journey> journeys) throws ResponseError {
 		if (Config.getCacheTripTimeToLive() != 0) {
 			return Config.getCacheTripTimeToLive();
 		}
@@ -72,6 +72,9 @@ public class JourneyUpdateTask extends AbstractUpdateTask {
 			if (journey.getOutbound().getDeparture().getTime() > max) {
 				max = journey.getOutbound().getDeparture().getTime();
 			}
+		}
+		if (max == 0) {
+			throw new ResponseError("Invalid time to live");
 		}
 		return max - System.currentTimeMillis();
 	}

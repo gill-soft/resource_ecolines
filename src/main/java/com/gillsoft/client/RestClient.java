@@ -399,7 +399,7 @@ public class RestClient {
 		case "31":
 			return Currency.UAH;
 		case "12":
-			return Currency.RUR;
+			return Currency.RUB;
 		case "35":
 			return Currency.PLN;
 		case "11":
