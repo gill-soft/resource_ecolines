@@ -198,10 +198,11 @@ public class RestClient {
 		return sendRequest(searchTemplate, method, HttpMethod.GET, params, typeReference);
 	}
 	
-	public Booking createBooking(String journeyId, Map<String, Customer> customers, List<ServiceItem> services) throws ResponseError {
+	public Booking createBooking(String journeyId, Currency currency, Map<String, Customer> customers,
+			List<ServiceItem> services) throws ResponseError {
 		Booking booking = new Booking();
 		booking.setJourney(journeyId);
-		booking.setCurrency(Integer.parseInt(getCurrency(services.get(0).getPrice().getCurrency())));
+		booking.setCurrency(Integer.parseInt(getCurrency(currency)));
 		for (ServiceItem serviceItem : services) {
 			Passenger passenger = null;
 			Customer customer = customers.get(serviceItem.getCustomer().getId());

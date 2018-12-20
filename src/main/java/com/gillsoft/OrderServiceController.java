@@ -47,7 +47,7 @@ public class OrderServiceController extends AbstractOrderService {
 		for (Entry<String, List<ServiceItem>> order : groupeByTripId(request).entrySet()) {
 			try {
 				// создаем бронирование
-				Booking booking = client.createBooking(order.getKey(), request.getCustomers(), order.getValue());
+				Booking booking = client.createBooking(order.getKey(), request.getCurrency(), request.getCustomers(), order.getValue());
 				
 				// получаем бронирование и обновляем стоимость
 				List<Ticket> tickets = client.getBooking(booking.getId());
