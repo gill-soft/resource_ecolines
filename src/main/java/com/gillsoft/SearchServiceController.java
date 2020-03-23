@@ -65,7 +65,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Sim
 	private RestClient client;
 	
 	@Autowired
-	@Qualifier("MemoryCacheHandler")
+	@Qualifier("RedisMemoryCache")
 	private CacheHandler cache;
 
 	@Override
